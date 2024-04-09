@@ -407,6 +407,33 @@ bool ControlTabWidget::takeTransformSamples()
     tf2_quat.normalize();
     base_to_eef_tf.transform.rotation = tf2::toMsg(tf2_quat);
 
+    // Verify that sample contains sufficient rotation
+    Eigen::Isometry3d base_to_eef_eig, camera_to_object_eig;
+    base_to_eef_eig = tf2::transformToEigen(base_to_eef_tf);
+    camera_to_object_eig = tf2::transformToEigen(camera_to_object_tf);
+
+    for (const auto& prior_tf : effector_wrt_world_)
+    {
+      Eigen::AngleAxisd rot((base_to_eef_eig.inverse() * prior_tf).rotation());
+      if (rot.angle() < MIN_ROTATION)
+      {
+        QMessageBox::warning(this, tr("Error"),
+                             tr("End-effector orientation is too similar to a prior sample. Sample not recorded."));
+        return false;
+      }
+    }
+
+    for (const auto prior_tf : object_wrt_sensor_)
+    {
+      Eigen::AngleAxisd rot((camera_to_object_eig.inverse() * prior_tf).rotation());
+      if (rot.angle() < MIN_ROTATION)
+      {
+        QMessageBox::warning(this, tr("Error"),
+                             tr("Camera orientation is too similar to a prior sample. Sample not recorded."));
+        return false;
+      }
+    }
+
     // save the pose samples
     effector_wrt_world_.push_back(base_to_eef_eig);
     object_wrt_sensor_.push_back(camera_to_object_eig);
